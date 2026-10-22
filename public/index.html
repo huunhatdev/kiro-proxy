@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kiro Manager</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f9; --panel: #fff; --panel-2: #f0f3f7; --text: #17202a;
+        --muted: #647181; --border: #d8dee8; --accent: #0f766e; --accent-dark: #0b5f59;
+        --danger: #b42318; --success: #087443; --warn: #b45309;
+        --shadow: 0 18px 42px rgba(17,24,39,.08);
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--sans); }
+      button, input, textarea { font: inherit; }
+      button { cursor: pointer; }
+      .app { width: min(1080px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0; }
+      h1 { margin: 0 0 4px; font-size: 28px; font-weight: 760; }
+      .subtitle { margin: 0 0 20px; color: var(--muted); }
+      .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); margin-bottom: 18px; }
+      .panel-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+      .panel-head strong { font-size: 15px; }
+      .panel-body { padding: 16px 18px; }
+      label.lbl { display: block; color: var(--muted); font-size: 13px; font-weight: 650; margin-bottom: 6px; }
+      textarea { width: 100%; height: 150px; resize: vertical; border: 1px solid var(--border); border-radius: 8px; background: #fbfcfe; font-family: var(--mono); font-size: 12px; padding: 10px; outline: none; }
+      textarea:focus { border-color: rgba(15,118,110,.8); box-shadow: 0 0 0 3px rgba(15,118,110,.14); }
+      input[type=text] { width: 100%; height: 40px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; background: #fbfcfe; outline: none; }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; }
+      .row > .grow { flex: 1 1 240px; }
+      .btn { height: 40px; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0 16px; font-weight: 700; }
+      .btn:hover { background: #eef2f6; }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .btn.primary:hover { background: var(--accent-dark); }
+      .btn.sm { height: 32px; padding: 0 10px; font-size: 13px; font-weight: 600; }
+      .btn.danger { color: var(--danger); border-color: rgba(180,35,24,.4); }
+      .btn.danger:hover { background: #fff5f4; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+      th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+      td.actions { white-space: nowrap; display: flex; gap: 6px; }
+      .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+      .pill.on { background: #e7f6ef; color: var(--success); }
+      .pill.off { background: #f1f3f6; color: var(--muted); }
+      .pill.exp { background: #fdecec; color: var(--danger); }
+      .mono { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      .msg { min-height: 20px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+      .msg.err { color: var(--danger); }
+      .msg.ok { color: var(--success); }
+      .endpoint { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+      .empty { color: var(--muted); padding: 18px; text-align: center; }
+      .err-note { color: var(--danger); font-size: 12px; }
+      .segmented { display: inline-flex; gap: 4px; padding: 4px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; }
+      .segmented button { border: 0; border-radius: 6px; height: 32px; padding: 0 12px; background: transparent; color: var(--muted); font-weight: 700; }
+      .segmented button.active { background: #fff; color: var(--text); box-shadow: 0 1px 4px rgba(17,24,39,.12); }
+      .bar { height: 7px; border-radius: 999px; background: #e6eaf0; overflow: hidden; margin-top: 4px; }
+      .bar > span { display: block; height: 100%; background: var(--accent); }
+      .bar > span.warn { background: var(--warn); }
+      .bar > span.full { background: var(--danger); }
+      .quota-txt { font-size: 12px; color: var(--muted); }
+      input.prio { width: 68px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <h1>Kiro Manager</h1>
+      <p class="subtitle">Quản lý Kiro token và chạy proxy tương thích OpenAI.</p>
+
+      <section class="panel">
+        <div class="panel-head"><strong>OpenAI endpoint</strong></div>
+        <div class="panel-body">
+          <div class="endpoint">
+            <span id="baseUrl">…/v1</span>
+            <button class="btn sm" id="copyUrl" type="button">Copy</button>
+          </div>
+          <p class="msg">Trỏ client OpenAI vào URL trên. Chọn account cụ thể bằng header <span class="mono">X-Kiro-Account: &lt;id&gt;</span> (mặc định: theo cơ chế chọn bên dưới).</p>
+          <div class="row" style="margin-top:4px">
+            <div>
+              <label class="lbl">Cơ chế chọn account</label>
+              <div class="segmented" id="modeSeg">
+                <button type="button" data-mode="priority">Theo priority</button>
+                <button type="button" data-mode="round-robin">Xoay vòng</button>
+              </div>
+            </div>
+            <div class="msg" id="modeMsg" style="align-self:center"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><strong>Thêm Kiro account</strong></div>
+        <div class="panel-body">
+          <label class="lbl" for="jsonInput">Dán nội dung JSON token của Kiro (ví dụ file <span class="mono">~/.aws/sso/cache/kiro-auth-token.json</span>)</label>
+          <textarea id="jsonInput" spellcheck="false" placeholder='{ "accessToken": "...", "refreshToken": "...", "authMethod": "external_idp", ... }'></textarea>
+          <div class="row">
+            <div class="grow">
+              <label class="lbl" for="labelInput">Nhãn (tuỳ chọn)</label>
+              <input type="text" id="labelInput" placeholder="vd: tài khoản chính" />
+            </div>
+            <div class="grow">
+              <label class="lbl" for="arnInput">Profile ARN (tuỳ chọn — tự dò nếu để trống)</label>
+              <input type="text" id="arnInput" placeholder="arn:aws:codewhisperer:us-east-1:...:profile/XXXX" />
+            </div>
+            <div>
+              <label class="lbl" for="prioInput">Priority</label>
+              <input type="text" id="prioInput" class="prio" value="100" />
+            </div>
+            <button class="btn primary" id="addBtn" type="button">Thêm account</button>
+          </div>
+          <div class="msg" id="addMsg"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <strong>Accounts</strong>
+          <div style="display:flex;gap:8px">
+            <button class="btn sm" id="quotaBtn" type="button">Refresh quota</button>
+            <button class="btn sm" id="reloadBtn" type="button">Tải lại</button>
+          </div>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <table>
+            <thead>
+              <tr><th>Nhãn / Email</th><th>Prio</th><th>Quota</th><th>Trạng thái</th><th>Hết hạn</th><th>Thao tác</th></tr>
+            </thead>
+            <tbody id="rows"><tr><td colspan="6" class="empty">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const qs = new URLSearchParams(location.search);
+      const adminToken = qs.get("token") || "";
+      const authHeaders = adminToken ? { "X-Admin-Token": adminToken } : {};
+      document.getElementById("baseUrl").textContent = location.origin + "/v1";
+
+      const rows = document.getElementById("rows");
+      const addMsg = document.getElementById("addMsg");
+
+      function setMsg(el, text, type) {
+        el.textContent = text || "";
+        el.className = "msg" + (type ? " " + type : "");
+      }
+
+      async function api(path, opts = {}) {
+        const res = await fetch("/api" + path, {
+          ...opts,
+          headers: { "Content-Type": "application/json", ...authHeaders, ...(opts.headers || {}) },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+        return data;
+      }
+
+      function fmtDate(iso) {
+        if (!iso) return "-";
+        const d = new Date(iso);
+        if (isNaN(d)) return iso;
+        return d.toLocaleString();
+      }
+
+      function statusPill(a) {
+        if (a.expired) return '<span class="pill exp">hết hạn</span>';
+        if (!a.enabled && a.autoDisabledReason) return '<span class="pill exp">tự tắt</span>';
+        return a.enabled ? '<span class="pill on">đang bật</span>' : '<span class="pill off">tắt</span>';
+      }
+
+      function fmtNum(n) {
+        if (n == null) return "-";
+        return (Math.round(n * 100) / 100).toLocaleString();
+      }
+
+      function quotaCell(a) {
+        const u = a.usage;
+        if (!u) return '<span class="quota-txt">chưa tải</span>';
+        const p = u.primary;
+        let bar = "";
+        if (p && p.limit > 0) {
+          const pct = Math.min(100, p.percent || 0);
+          const cls = pct >= 100 ? "full" : pct >= 80 ? "warn" : "";
+          bar = '<div class="bar"><span class="' + cls + '" style="width:' + pct.toFixed(1) + '%"></span></div>';
+        }
+        const line = p
+          ? fmtNum(p.used) + " / " + fmtNum(p.limit) + " " + (p.name || "")
+          : (u.plan || "");
+        const reset = u.resetAt ? ' · reset ' + new Date(u.resetAt).toLocaleDateString() : "";
+        const exhausted = u.exhausted ? ' <span class="pill exp">hết quota</span>' : "";
+        return '<div class="quota-txt">' + escapeHtml(u.plan || "") + exhausted + '</div>'
+          + bar
+          + '<div class="quota-txt">' + escapeHtml(line) + escapeHtml(reset) + '</div>';
+      }
+
+      function render(accounts) {
+        if (!accounts.length) {
+          rows.innerHTML = '<tr><td colspan="6" class="empty">Chưa có account nào. Dán JSON ở trên để thêm.</td></tr>';
+          return;
+        }
+        rows.innerHTML = accounts.map((a) => `
+          <tr data-id="${a.id}">
+            <td>
+              <div>${escapeHtml(a.label || a.email || a.id)}</div>
+              <div class="mono">${escapeHtml(a.email || "")}</div>
+              <div class="mono">${escapeHtml(a.authMethod || "")}</div>
+              ${a.lastError ? '<div class="err-note">' + escapeHtml(a.lastError) + "</div>" : ""}
+              ${a.autoDisabledReason ? '<div class="err-note">⛔ tự tắt: ' + escapeHtml(a.autoDisabledReason) + "</div>" : ""}
+            </td>
+            <td><input type="text" class="prio" data-prio value="${a.priority}" /></td>
+            <td>${quotaCell(a)}</td>
+            <td>${statusPill(a)}</td>
+            <td class="mono">${fmtDate(a.expiresAt)}</td>
+            <td class="actions">
+              <button class="btn sm" data-act="toggle">${a.enabled ? "Tắt" : "Bật"}</button>
+              <button class="btn sm" data-act="arn">ARN</button>
+              <button class="btn sm" data-act="test">Test</button>
+              <button class="btn sm" data-act="refresh">Refresh</button>
+              <button class="btn sm danger" data-act="delete">Xoá</button>
+            </td>
+          </tr>`).join("");
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      }
+
+      async function load() {
+        try {
+          const data = await api("/accounts");
+          render(data.accounts);
+          if (data.selectionMode) setMode(data.selectionMode, false);
+        } catch (err) {
+          rows.innerHTML = '<tr><td colspan="6" class="empty">Lỗi: ' + escapeHtml(err.message) + "</td></tr>";
+        }
+      }
+
+      const modeSeg = document.getElementById("modeSeg");
+      const modeMsg = document.getElementById("modeMsg");
+      let currentMode = "priority";
+      function setMode(mode, persist) {
+        currentMode = mode;
+        [...modeSeg.querySelectorAll("button")].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+        if (persist) {
+          api("/settings", { method: "PUT", body: JSON.stringify({ selectionMode: mode }) })
+            .then(() => setMsg(modeMsg, "Đã lưu cơ chế: " + (mode === "priority" ? "theo priority" : "xoay vòng"), "ok"))
+            .catch((e) => setMsg(modeMsg, "Lỗi: " + e.message, "err"));
+        }
+      }
+      modeSeg.addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-mode]");
+        if (b) setMode(b.dataset.mode, true);
+      });
+
+      document.getElementById("quotaBtn").addEventListener("click", async (e) => {
+        const btn = e.target;
+        btn.disabled = true; btn.textContent = "Đang tải…";
+        try { const d = await api("/quota/refresh", { method: "POST" }); render(d.accounts); }
+        catch (err) { alert("Lỗi: " + err.message); }
+        finally { btn.disabled = false; btn.textContent = "Refresh quota"; }
+      });
+
+      document.getElementById("addBtn").addEventListener("click", async () => {
+        const json = document.getElementById("jsonInput").value.trim();
+        const label = document.getElementById("labelInput").value.trim();
+        const profileArn = document.getElementById("arnInput").value.trim();
+        const priority = Number(document.getElementById("prioInput").value) || 100;
+        if (!json) { setMsg(addMsg, "Hãy dán JSON token.", "err"); return; }
+        let parsed;
+        try { parsed = JSON.parse(json); } catch { setMsg(addMsg, "JSON không hợp lệ.", "err"); return; }
+        setMsg(addMsg, "Đang thêm & kiểm tra…");
+        try {
+          const { account } = await api("/accounts", { method: "POST", body: JSON.stringify({ json: parsed, label, profileArn, priority }) });
+          setMsg(addMsg, "Đã thêm account: " + (account.label || account.id) + (account.profileArn ? "" : " (chưa có Profile ARN — hãy nhập thủ công nếu Test lỗi)"), "ok");
+          document.getElementById("jsonInput").value = "";
+          document.getElementById("labelInput").value = "";
+          document.getElementById("arnInput").value = "";
+          load();
+        } catch (err) {
+          setMsg(addMsg, "Lỗi: " + err.message, "err");
+        }
+      });
+
+      document.getElementById("reloadBtn").addEventListener("click", load);
+      document.getElementById("copyUrl").addEventListener("click", () => {
+        navigator.clipboard.writeText(location.origin + "/v1").catch(() => {});
+      });
+
+      rows.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-act]");
+        if (!btn) return;
+        const tr = btn.closest("tr");
+        const id = tr.dataset.id;
+        const act = btn.dataset.act;
+        btn.disabled = true;
+        try {
+          if (act === "delete") {
+            if (!confirm("Xoá account này?")) { btn.disabled = false; return; }
+            await api("/accounts/" + id, { method: "DELETE" });
+          } else if (act === "toggle") {
+            const enabled = btn.textContent.trim() === "Bật";
+            await api("/accounts/" + id, { method: "PATCH", body: JSON.stringify({ enabled }) });
+          } else if (act === "refresh") {
+            await api("/accounts/" + id + "/refresh", { method: "POST" });
+          } else if (act === "arn") {
+            const current = tr.querySelector('.mono')?.textContent || "";
+            const arn = prompt("Nhập Profile ARN:", "");
+            if (arn === null) { btn.disabled = false; return; }
+            await api("/accounts/" + id, { method: "PATCH", body: JSON.stringify({ profileArn: arn.trim() }) });
+          } else if (act === "test") {
+            const r = await api("/accounts/" + id + "/test", { method: "POST" });
+            alert("Test OK: " + (r.reply || "(trống)"));
+          }
+          load();
+        } catch (err) {
+          alert("Lỗi: " + err.message);
+          btn.disabled = false;
+        }
+      });
+
+      rows.addEventListener("change", async (e) => {
+        const input = e.target.closest("input[data-prio]");
+        if (!input) return;
+        const id = input.closest("tr").dataset.id;
+        const priority = Number(input.value);
+        if (!Number.isFinite(priority)) return;
+        try { await api("/accounts/" + id, { method: "PATCH", body: JSON.stringify({ priority }) }); }
+        catch (err) { alert("Lỗi: " + err.message); load(); }
+      });
+
+      load();
+    </script>
+  </body>
+</html>

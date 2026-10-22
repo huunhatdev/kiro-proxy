@@ -1,0 +1,9 @@
+# Secrets / local config — never commit the real .env
+.env
+
+# Persisted account tokens
+data/
+
+node_modules/
+*.log
+.DS_Store

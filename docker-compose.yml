@@ -1,0 +1,25 @@
+services:
+  kiro-manager:
+    build: .
+    image: kiro-manager:latest
+    container_name: kiro-manager
+    # All settings come from the .env file in this directory (copy .env.example).
+    # env_file passes the variables INTO the container; the ${...} values below
+    # are host-side substitutions Compose resolves from that same .env.
+    env_file:
+      - .env
+    ports:
+      - "${HOST_PORT:-8080}:${PORT:-8080}"
+    environment:
+      # Data always lives on the mounted volume, regardless of .env.
+      DATA_DIR: /data
+    volumes:
+      - kiro-data:/data
+      # Optional: mount a host .kiro (read-only) so the profile ARN is
+      # auto-discovered. To enable, set KIRO_HOME_HOST in .env AND uncomment the
+      # line below. On Windows use a path like C:/Users/you/.kiro
+      # - "${KIRO_HOME_HOST}:/root/.kiro:ro"
+    restart: unless-stopped
+
+volumes:
+  kiro-data:

@@ -1,0 +1,14 @@
+{
+  "name": "kiro-manager",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Web UI + OpenAI-compatible proxy to manage Kiro accounts/tokens",
+  "main": "src/server.mjs",
+  "scripts": {
+    "start": "node src/server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
