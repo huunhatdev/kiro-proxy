@@ -54,7 +54,25 @@ export function messagesToInput(messages) {
     else if (m.role === 'assistant') { if (text) input.push({ role: 'assistant', content: text }); }
     else input.push({ role: 'user', content: text });
   }
-  return { input, instructions: systemParts.length ? systemParts.join('\n') : undefined };
+  const instructions = systemParts.length ? systemParts.join('\n') : undefined;
+  return { input, instructions };
+}
+
+// Some accounts are not allowed to use the `instructions` field (the backend
+// replies: "systemPrompt field is not enabled for this user"). For those we
+// fold the system prompt into the conversation as a leading user turn instead.
+export function foldInstructionsIntoInput(input, instructions) {
+  if (!instructions) return input;
+  const folded = [...input];
+  const firstUserIdx = folded.findIndex((m) => m.role === 'user');
+  const sys = `[System]\n${instructions}`;
+  if (firstUserIdx !== -1) {
+    const u = folded[firstUserIdx];
+    folded[firstUserIdx] = { ...u, content: `${sys}\n\n${contentToText(u.content)}` };
+  } else {
+    folded.unshift({ role: 'user', content: sys });
+  }
+  return folded;
 }
 
 function headersFor(store, acc) {
@@ -151,10 +169,31 @@ export function discoverProfileArnLocal(kiroHome) {
   return '';
 }
 
+// Detect the backend's "instructions not allowed for this account" rejection.
+function isSystemPromptDisabled(text) {
+  if (!text) return false;
+  return /systemPrompt field is not enabled/i.test(text) ||
+    (/unsupported_parameter/i.test(text) && /instructions/i.test(text));
+}
+
 // Call Kiro and stream assistant text via onDelta. Returns full text.
+// If the account can't use the `instructions` field, retry once with the
+// system prompt folded into the conversation input.
 export async function callKiro({ store, acc, model, messages, onDelta }) {
   await store.getAccessToken(acc); // ensure fresh
   const { input, instructions } = messagesToInput(messages);
+  try {
+    return await callKiroOnce({ store, acc, model, input, instructions, onDelta });
+  } catch (e) {
+    if (instructions && isSystemPromptDisabled(e?.message)) {
+      const folded = foldInstructionsIntoInput(input, instructions);
+      return await callKiroOnce({ store, acc, model, input: folded, instructions: undefined, onDelta });
+    }
+    throw e;
+  }
+}
+
+async function callKiroOnce({ store, acc, model, input, instructions, onDelta }) {
   const body = {
     model: model && model !== 'auto' ? model : 'auto',
     input,
