@@ -216,6 +216,7 @@
             <td class="actions">
               <button class="btn sm" data-act="toggle">${a.enabled ? "Tắt" : "Bật"}</button>
               <button class="btn sm" data-act="arn">ARN</button>
+              <button class="btn sm" data-act="discover">Dò ARN</button>
               <button class="btn sm" data-act="test">Test</button>
               <button class="btn sm" data-act="refresh">Refresh</button>
               <button class="btn sm danger" data-act="delete">Xoá</button>
@@ -309,6 +310,13 @@
             const arn = prompt("Nhập Profile ARN:", "");
             if (arn === null) { btn.disabled = false; return; }
             await api("/accounts/" + id, { method: "PATCH", body: JSON.stringify({ profileArn: arn.trim() }) });
+          } else if (act === "discover") {
+            try {
+              const r = await api("/accounts/" + id + "/discover-arn", { method: "POST" });
+              alert("Đã dò được ARN (" + r.source + "):\n" + r.profileArn);
+            } catch (e) {
+              alert("Không tự dò được: " + e.message + "\n\nDùng nút ARN để nhập thủ công.");
+            }
           } else if (act === "test") {
             const r = await api("/accounts/" + id + "/test", { method: "POST" });
             alert("Test OK: " + (r.reply || "(trống)"));

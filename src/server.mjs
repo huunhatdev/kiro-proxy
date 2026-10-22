@@ -137,12 +137,20 @@ async function handleAdminApi(req, res, url) {
         acc.profileArn = payload.profileArn.trim();
         await store.save();
       }
-      // otherwise auto-discover (HTTP, then local kiro-cli cache)
+      // otherwise auto-discover (network listAvailableProfiles, then local cache)
       if (!acc.profileArn) {
         try {
           await store.getAccessToken(acc);
-          const arn = await discoverProfileArn(acc.accessToken, store.tokenType(acc));
-          if (arn) { acc.profileArn = arn; await store.save(); }
+          const d = await discoverProfileArn(acc.accessToken, store.tokenType(acc),
+            acc.region ? [acc.region] : undefined);
+          if (d.arn) {
+            acc.profileArn = d.arn;
+            if (d.region) acc.region = d.region;
+            await store.save();
+          } else {
+            acc.lastError = 'không tự dò được Profile ARN — hãy nhập thủ công (account enterprise thường bị chặn liệt kê profile)';
+            await store.save();
+          }
         } catch (e) { acc.lastError = `profile discovery: ${e.message}`; await store.save(); }
       }
       return sendJson(res, 200, { account: store.redact(acc) });
@@ -172,6 +180,30 @@ async function handleAdminApi(req, res, url) {
     if (!acc) return sendJson(res, 404, { error: 'account not found' });
     try { await store.refresh(acc); return sendJson(res, 200, { account: store.redact(acc) }); }
     catch (err) { return sendJson(res, 502, { error: err.message }); }
+  }
+
+  // POST /api/accounts/:id/discover-arn  -> re-run network ARN discovery
+  if (req.method === 'POST' && parts.length === 4 && parts[1] === 'accounts' && parts[3] === 'discover-arn') {
+    const acc = store.get(parts[2]);
+    if (!acc) return sendJson(res, 404, { error: 'account not found' });
+    try {
+      await store.getAccessToken(acc);
+      const d = await discoverProfileArn(acc.accessToken, store.tokenType(acc),
+        acc.region ? [acc.region] : undefined);
+      if (d.arn) {
+        acc.profileArn = d.arn;
+        if (d.region) acc.region = d.region;
+        acc.lastError = null;
+        await store.save();
+        return sendJson(res, 200, { ok: true, profileArn: d.arn, source: d.source, account: store.redact(acc) });
+      }
+      const reason = `không tự dò được Profile ARN (${(d.errors || []).join(', ') || 'bị từ chối'}). Nhập thủ công bằng nút ARN.`;
+      acc.lastError = reason; await store.save();
+      return sendJson(res, 422, { ok: false, error: reason, account: store.redact(acc) });
+    } catch (err) {
+      acc.lastError = err.message; await store.save();
+      return sendJson(res, 502, { error: err.message });
+    }
   }
 
   // POST /api/accounts/:id/test  -> one-shot chat to confirm it works

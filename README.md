@@ -100,14 +100,26 @@ reason and stale error.
 ## Profile ARN
 
 Kiro requires an enterprise profile ARN
-(`arn:aws:codewhisperer:…:profile/…`) that is **not** inside the token file — it
-lives in `~/.kiro/enterprise-management/`. The app finds it by:
+(`arn:aws:codewhisperer:…:profile/…`) that is **not** inside the token file. The
+app finds it in this order:
 
 1. the `profileArn` you pass when adding an account (UI field), else
-2. reading the local kiro-cli cache under `KIRO_HOME` (default `~/.kiro`).
+2. **network discovery** — it calls Kiro's `listAvailableProfiles` with your
+   access token and reads the ARN from the response. This works in Docker with
+   **no kiro-cli installed**. The token must be fresh enough to authenticate
+   (the app refreshes it automatically before discovery), else
+3. a mounted kiro-cli cache under `KIRO_HOME` (default `/root/.kiro`).
 
-To let Docker use path 2, mount your host `.kiro` read-only (see the commented
-volume in `docker-compose.yml`). Otherwise just paste the ARN.
+If all three fail (e.g. an account type the control plane refuses), paste the
+ARN with the **ARN** button. The **Dò ARN** button re-runs network discovery on
+demand for an existing account.
+
+To get the ARN manually from a machine that has kiro-cli, read
+`profileArn` in `~/.kiro/enterprise-management/<hash>/entry.json`.
+
+Mounting `~/.kiro` into Docker (step 3) is optional — only needed when network
+discovery is refused for your account type. See the commented volume in
+`docker-compose.yml` and `KIRO_HOME_HOST` in `.env`.
 
 ## Security
 
@@ -153,6 +165,7 @@ All under `/api` (require `X-Admin-Token` when `ADMIN_TOKEN` is set):
 | PATCH | `/api/accounts/:id` | `{ label?, enabled?, profileArn?, priority? }` | Edit |
 | DELETE | `/api/accounts/:id` | — | Remove |
 | POST | `/api/accounts/:id/refresh` | — | Force token refresh |
+| POST | `/api/accounts/:id/discover-arn` | — | Re-run network ARN discovery |
 | POST | `/api/accounts/:id/test` | — | One-shot chat to verify |
 | GET | `/api/accounts/:id/quota` | — | Fetch + cache usage for one account |
 | POST | `/api/quota/refresh` | — | Fetch usage for all accounts |

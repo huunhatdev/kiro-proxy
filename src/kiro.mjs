@@ -72,29 +72,47 @@ function headersFor(store, acc) {
   return h;
 }
 
-// Discover the profile ARN by listing available profiles with the access token.
-export async function discoverProfileArn(accessToken, tokenType) {
-  const url = `${ENDPOINT}/v1/profiles`;
-  const headers = {
-    'authorization': `Bearer ${accessToken}`,
-    'x-amzn-kiro-origin': ORIGIN,
-    'accept': 'application/json',
-  };
-  if (tokenType) headers['TokenType'] = tokenType;
-  try {
-    const { status, body } = await httpJson(url, { headers });
-    if (status >= 200 && status < 300) {
-      const data = JSON.parse(body);
-      const arr = data.profiles || data.profileList || (Array.isArray(data) ? data : []);
-      const first = arr[0];
-      const arn = first?.arn || first?.profileArn || first?.ARN;
-      if (arn) return arn;
+// Discover the profile ARN over the network by listing available profiles with
+// the access token. Sweeps control-plane regions. Works for account types the
+// Kiro control plane answers (Builder ID / some IdC). Enterprise external_idp
+// accounts are often denied (403) here — for those the ARN must be supplied
+// manually or read from a mounted ~/.kiro (discoverProfileArnLocal).
+export async function discoverProfileArn(accessToken, tokenType, regions) {
+  const sweep = regions && regions.length ? regions : Object.keys(CONTROL_PLANE_HOSTS);
+  const errors = [];
+  for (const region of sweep) {
+    const host = CONTROL_PLANE_HOSTS[region];
+    if (!host) continue;
+    const headers = {
+      'authorization': `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+      'accept': 'application/json',
+      'user-agent': 'kiro-manager/1.0',
+    };
+    if (tokenType) headers['TokenType'] = tokenType;
+    try {
+      const { status, body } = await httpJson(`${host}/listAvailableProfiles`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ maxResults: 10 }),
+      });
+      if (status >= 200 && status < 300) {
+        const data = JSON.parse(body);
+        const arr = data.profiles || [];
+        const arn = arr[0]?.arn || arr[0]?.profileArn || arr[0]?.ARN;
+        if (arn) return { arn, region, source: 'network' };
+      } else {
+        errors.push(`${region}:${status}`);
+      }
+    } catch (e) {
+      errors.push(`${region}:${e.message}`);
     }
-  } catch { /* fall through */ }
-  // Fallback: read the profile ARN that kiro-cli cached locally. Works when the
-  // manager runs on the same host/volume as a kiro-cli install (mount
-  // ~/.kiro into the container to use this).
-  return discoverProfileArnLocal();
+  }
+  // Network discovery failed for every region. Fall back to a mounted kiro-cli
+  // cache if present (KIRO_HOME), otherwise give up with a helpful reason.
+  const local = discoverProfileArnLocal();
+  if (local) return { arn: local, region: '', source: 'local-cache' };
+  return { arn: '', region: '', source: 'none', errors };
 }
 
 const ARN_RE = /arn:aws:codewhisperer:[a-z0-9-]+:\d+:profile\/[A-Za-z0-9]+/;
